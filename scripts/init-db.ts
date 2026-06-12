@@ -24,6 +24,20 @@ async function main() {
     notes TEXT,
     created_at TIMESTAMPTZ DEFAULT NOW()
   )`;
+  await sql`CREATE TABLE IF NOT EXISTS signal_lifecycle_events (
+    id SERIAL PRIMARY KEY,
+    event_date DATE NOT NULL,
+    signal_category TEXT NOT NULL,
+    signal_name TEXT NOT NULL,
+    event_type TEXT NOT NULL CHECK (event_type IN ('breach', 'clear')),
+    reading_date DATE NOT NULL,
+    reading_value NUMERIC,
+    reading_text TEXT,
+    notes TEXT,
+    created_at TIMESTAMPTZ DEFAULT NOW()
+  )`;
+  await sql`CREATE INDEX IF NOT EXISTS idx_signal_lifecycle_events_signal ON signal_lifecycle_events(signal_name, created_at DESC)`;
+  await sql`CREATE INDEX IF NOT EXISTS idx_signal_lifecycle_events_type_date ON signal_lifecycle_events(event_type, created_at DESC)`;
   await sql`CREATE TABLE IF NOT EXISTS earnings_calendar (
     id SERIAL PRIMARY KEY,
     ticker TEXT NOT NULL,

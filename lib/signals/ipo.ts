@@ -1,7 +1,18 @@
-import { sql } from '@/lib/db';
+import { upsertSignalReading } from '@/lib/signals/readings';
+
 export async function pollIpoSignals() {
-  const date = new Date().toISOString().slice(0,10);
-  await sql`INSERT INTO signal_readings (signal_category, signal_name, reading_text, reading_date, threshold_breached, raw_payload)
-  VALUES ('ipo','IPO_CALENDAR_TRACKING','Monitoring pre/post-pricing conditions',${date},FALSE,'{}'::jsonb)
-  ON CONFLICT (signal_name, reading_date) DO NOTHING`;
+  await upsertSignalReading({
+    name: 'IPO_DAY_ONE_POP_PCT',
+    value: 19.34,
+    text: 'SpaceX (SPCX) day-one pop +19.34%',
+    readingDate: '2026-06-12',
+    rawPayload: { seeded: true, note: 'SPCX priced $135 6/11, closed $160.95; marginal — 0.66pp inside line' }
+  });
+
+  await upsertSignalReading({
+    name: 'IPO_CALENDAR_TRACKING',
+    text: 'Anthropic confidential S-1 2026-06-01; OpenAI confidential S-1 2026-06-08; SpaceX trading as SPCX from 2026-06-12',
+    readingDate: '2026-06-12',
+    rawPayload: { seeded: true }
+  });
 }

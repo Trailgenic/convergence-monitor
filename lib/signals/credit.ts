@@ -1,5 +1,4 @@
-import { sql } from '@/lib/db';
-import { thresholds } from '@/lib/thresholds';
+import { upsertSignalReading } from '@/lib/signals/readings';
 
 const fred = async (seriesId: string) => {
   const key = process.env.FRED_API_KEY;
@@ -10,30 +9,57 @@ const fred = async (seriesId: string) => {
   return (await res.json()).observations as Array<{ date: string; value: string }>;
 };
 
+function maxOneDayMove(values: number[]) {
+  let maxMove = Number.NEGATIVE_INFINITY;
+  for (let i = 0; i < values.length - 1; i += 1) {
+    maxMove = Math.max(maxMove, values[i] - values[i + 1]);
+  }
+  return maxMove;
+}
+
 export async function pollCreditSignals() {
   const hy = await fred('BAMLH0A0HYM2');
   const ig = await fred('BAMLC0A0CM');
   const delinq = await fred('DRCCLACBS');
   const date = hy[0].date;
 
-  const hyNow = Number(hy[0].value), hyPrev = Number(hy[1].value), hy14 = Number(hy[14]?.value ?? hy[hy.length - 1].value);
-  const igNow = Number(ig[0].value), ig14 = Number(ig[14]?.value ?? ig[ig.length - 1].value);
+  const hyValues = hy.slice(0, 15).map((row) => Number(row.value));
+  const igValues = ig.slice(0, 15).map((row) => Number(row.value));
+  const hyNow = hyValues[0], hy14 = hyValues[14] ?? hyValues[hyValues.length - 1];
+  const igNow = igValues[0], ig14 = igValues[14] ?? igValues[igValues.length - 1];
   const delinqNow = Number(delinq[0].value);
 
-  const spread2wDelta = (hyNow - igNow) - (hy14 - ig14);
-  const hySpike = hyNow - hyPrev;
-
   const records = [
-    { name: 'IG_HY_SPREAD_2W_DELTA_BPS', value: spread2wDelta, threshold: thresholds.credit.IG_HY_SPREAD_2W_DELTA_BPS, breached: spread2wDelta > thresholds.credit.IG_HY_SPREAD_2W_DELTA_BPS },
-    { name: 'CC_DELINQ_90D_THRESHOLD', value: delinqNow, threshold: thresholds.credit.CC_DELINQ_90D_THRESHOLD, breached: delinqNow > thresholds.credit.CC_DELINQ_90D_THRESHOLD },
-    { name: 'HY_OAS_SPIKE_BPS', value: hySpike, threshold: thresholds.credit.HY_OAS_SPIKE_BPS, breached: hySpike > thresholds.credit.HY_OAS_SPIKE_BPS }
+    await upsertSignalReading({
+      name: 'IG_HY_SPREAD_2W_DELTA_BPS',
+      value: (hyNow - igNow) - (hy14 - ig14),
+      text: 'FRED HY minus IG OAS 14d delta',
+      readingDate: date,
+      rawPayload: { hyNow, hy14, igNow, ig14, rawUnit: 'percentage_points' }
+    }),
+    await upsertSignalReading({
+      name: 'HY_OAS_SPIKE_BPS',
+      value: maxOneDayMove(hyValues),
+      text: 'FRED max 1d HY OAS move over trailing 14d',
+      readingDate: date,
+      rawPayload: { hyValues, rawUnit: 'percentage_points' }
+    }),
+    await upsertSignalReading({
+      name: 'CC_DELINQ_DRCCLACBS_SENTINEL',
+      value: delinqNow,
+      text: `${delinqNow}% DRCCLACBS sentinel`,
+      readingDate: delinq[0].date,
+      rawPayload: { rawUnit: 'percent', seriesId: 'DRCCLACBS' }
+    })
   ];
 
-  for (const r of records) {
-    await sql`INSERT INTO signal_readings (signal_category, signal_name, reading_value, reading_date, threshold_breached, threshold_value, raw_payload)
-      VALUES ('credit', ${r.name}, ${r.value}, ${date}, ${r.breached}, ${r.threshold}, ${JSON.stringify({ hyNow, igNow, delinqNow })}::jsonb)
-      ON CONFLICT (signal_name, reading_date) DO UPDATE SET reading_value = EXCLUDED.reading_value, threshold_breached = EXCLUDED.threshold_breached, raw_payload = EXCLUDED.raw_payload`;
-  }
+  await upsertSignalReading({
+    name: 'CC_DELINQ_90D_NYFED',
+    value: 13.12,
+    text: 'NY Fed account-based, Q1 2026; update quarterly from Household Debt & Credit report',
+    readingDate: '2026-03-31',
+    rawPayload: { seeded: true, note: 'NY Fed account-based, Q1 2026; update quarterly from Household Debt & Credit report' }
+  });
 
   return records;
 }

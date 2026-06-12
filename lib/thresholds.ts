@@ -4,11 +4,12 @@ export const thresholds = {
   credit: {
     IG_HY_SPREAD_2W_DELTA_BPS: num('IG_HY_SPREAD_2W_DELTA_BPS', 50),
     CC_DELINQ_90D_THRESHOLD: num('CC_DELINQ_90D_THRESHOLD', 14.0),
+    // FRED BAMLH0A0HYM2 is published in percentage points; pollCreditSignals converts daily deltas to basis points before comparing to this bps threshold.
     HY_OAS_SPIKE_BPS: num('HY_OAS_SPIKE_BPS', 100)
   },
   energy: {
-    PJM_LMP_THRESHOLD_USD_MWH: num('PJM_LMP_THRESHOLD_USD_MWH', 80),
-    ERCOT_LMP_THRESHOLD_USD_MWH: num('ERCOT_LMP_THRESHOLD_USD_MWH', 80),
+    PJM_WEST_LMP_THRESHOLD_USD_MWH: num('PJM_WEST_LMP_THRESHOLD_USD_MWH', 80),
+    ERCOT_NORTH_LMP_THRESHOLD_USD_MWH: num('ERCOT_NORTH_LMP_THRESHOLD_USD_MWH', 80),
     CAISO_LMP_THRESHOLD_USD_MWH: num('CAISO_LMP_THRESHOLD_USD_MWH', 100)
   },
   cloud: {

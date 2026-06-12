@@ -1,4 +1,5 @@
 import { sql } from '@/lib/db';
+import { aggregateConvergence, type AggregationStatus } from '@/lib/aggregation';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
@@ -11,6 +12,7 @@ type CategoryRow = {
   threshold_value: string | number | null;
   threshold_breached: boolean;
   reading_date: string;
+  raw_payload?: unknown;
 };
 
 type EventRow = {
@@ -50,10 +52,12 @@ export default async function DashboardPage() {
   let activeCount: number | null = null;
   let clearedCount: number | null = null;
   const dashboardErrors = new Set<DashboardError>();
+  let aggregateStatus: AggregationStatus = 'Quiet';
 
   try {
-    const latestByCategoryResult = await sql`SELECT DISTINCT ON (signal_name) signal_category, signal_name, reading_value, reading_text, threshold_value, threshold_breached, reading_date FROM signal_readings ORDER BY signal_name, reading_date DESC, created_at DESC`;
+    const latestByCategoryResult = await sql`SELECT DISTINCT ON (signal_name) signal_category, signal_name, reading_value, reading_text, threshold_value, threshold_breached, reading_date, raw_payload FROM signal_readings ORDER BY signal_name, reading_date DESC, created_at DESC`;
     latestByCategory = (latestByCategoryResult.rows as CategoryRow[]).sort((a, b) => a.signal_category.localeCompare(b.signal_category) || a.signal_name.localeCompare(b.signal_name));
+    aggregateStatus = aggregateConvergence(latestByCategory).status;
   } catch (error) {
     console.error('Dashboard category state query failed', error);
     dashboardErrors.add(classifyDashboardError(error));
@@ -87,6 +91,7 @@ export default async function DashboardPage() {
 
   return <main>
     <h1>Convergence Monitor Dashboard</h1>
+    <p>Status: {aggregateStatus}</p>
     {errorMessages.map((message) => <p key={message}><small>{message}</small></p>)}
     <h2>Category state</h2>
     <table><thead><tr><th>Category</th><th>Signal</th><th>Last Reading</th><th>Threshold</th><th>Breach</th><th>Date</th></tr></thead><tbody>

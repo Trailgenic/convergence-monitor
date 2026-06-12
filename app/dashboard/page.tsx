@@ -1,5 +1,6 @@
 import { sql } from '@/lib/db';
 import { aggregateConvergence, type AggregationStatus } from '@/lib/aggregation';
+import { formatLastReading, isRegistrySignal } from '@/lib/dashboard-format';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
@@ -56,7 +57,9 @@ export default async function DashboardPage() {
 
   try {
     const latestByCategoryResult = await sql`SELECT DISTINCT ON (signal_name) signal_category, signal_name, reading_value, reading_text, threshold_value, threshold_breached, reading_date, raw_payload FROM signal_readings ORDER BY signal_name, reading_date DESC, created_at DESC`;
-    latestByCategory = (latestByCategoryResult.rows as CategoryRow[]).sort((a, b) => a.signal_category.localeCompare(b.signal_category) || a.signal_name.localeCompare(b.signal_name));
+    latestByCategory = (latestByCategoryResult.rows as CategoryRow[])
+      .filter((row) => isRegistrySignal(row.signal_name))
+      .sort((a, b) => a.signal_category.localeCompare(b.signal_category) || a.signal_name.localeCompare(b.signal_name));
     aggregateStatus = aggregateConvergence(latestByCategory).status;
   } catch (error) {
     console.error('Dashboard category state query failed', error);
@@ -95,7 +98,7 @@ export default async function DashboardPage() {
     {errorMessages.map((message) => <p key={message}><small>{message}</small></p>)}
     <h2>Category state</h2>
     <table><thead><tr><th>Category</th><th>Signal</th><th>Last Reading</th><th>Threshold</th><th>Breach</th><th>Date</th></tr></thead><tbody>
-      {latestByCategory.map((r) => <tr key={`${r.signal_category}-${r.signal_name}`}><td>{r.signal_category}</td><td>{r.signal_name}</td><td>{r.reading_text ?? r.reading_value ?? 'N/A'}</td><td>{r.threshold_value ?? 'N/A'}</td><td>{r.threshold_breached ? 'Yes' : 'No'}</td><td>{String(r.reading_date).slice(0,10)}</td></tr>)}
+      {latestByCategory.map((r) => <tr key={`${r.signal_category}-${r.signal_name}`}><td>{r.signal_category}</td><td>{r.signal_name}</td><td>{formatLastReading(r)}</td><td>{r.threshold_value ?? 'N/A'}</td><td>{r.threshold_breached ? 'Yes' : 'No'}</td><td>{String(r.reading_date).slice(0,10)}</td></tr>)}
     </tbody></table>
     <h2>Active vs cleared breaches (last 14 days)</h2>
     <p>Active readings: {activeCount ?? 'N/A'} | Cleared lifecycle events: {clearedCount ?? 'N/A'}</p>

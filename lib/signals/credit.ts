@@ -1,5 +1,5 @@
-import { sql } from '@/lib/db';
 import { thresholds } from '@/lib/thresholds';
+import { upsertSignalReading } from '@/lib/signals/readings';
 
 const fred = async (seriesId: string) => {
   const key = process.env.FRED_API_KEY;
@@ -9,6 +9,8 @@ const fred = async (seriesId: string) => {
   if (!res.ok) throw new Error(`FRED failed for ${seriesId}`);
   return (await res.json()).observations as Array<{ date: string; value: string }>;
 };
+
+const round2 = (n: number) => Math.round(n * 100) / 100;
 
 export async function pollCreditSignals() {
   const hy = await fred('BAMLH0A0HYM2');
@@ -20,19 +22,27 @@ export async function pollCreditSignals() {
   const igNow = Number(ig[0].value), ig14 = Number(ig[14]?.value ?? ig[ig.length - 1].value);
   const delinqNow = Number(delinq[0].value);
 
-  const spread2wDelta = (hyNow - igNow) - (hy14 - ig14);
-  const hySpike = hyNow - hyPrev;
+  const spread2wDeltaBps = round2(((hyNow - igNow) - (hy14 - ig14)) * 100);
+  const hySpikeBps = round2((hyNow - hyPrev) * 100);
+  const delinqPct = round2(delinqNow);
 
   const records = [
-    { name: 'IG_HY_SPREAD_2W_DELTA_BPS', value: spread2wDelta, threshold: thresholds.credit.IG_HY_SPREAD_2W_DELTA_BPS, breached: spread2wDelta > thresholds.credit.IG_HY_SPREAD_2W_DELTA_BPS },
-    { name: 'CC_DELINQ_90D_THRESHOLD', value: delinqNow, threshold: thresholds.credit.CC_DELINQ_90D_THRESHOLD, breached: delinqNow > thresholds.credit.CC_DELINQ_90D_THRESHOLD },
-    { name: 'HY_OAS_SPIKE_BPS', value: hySpike, threshold: thresholds.credit.HY_OAS_SPIKE_BPS, breached: hySpike > thresholds.credit.HY_OAS_SPIKE_BPS }
+    { name: 'IG_HY_SPREAD_2W_DELTA_BPS', value: spread2wDeltaBps, text: `${spread2wDeltaBps.toFixed(2)} bps`, threshold: thresholds.credit.IG_HY_SPREAD_2W_DELTA_BPS, breached: spread2wDeltaBps > thresholds.credit.IG_HY_SPREAD_2W_DELTA_BPS },
+    { name: 'CC_DELINQ_90D_THRESHOLD', value: delinqPct, text: `${delinqPct.toFixed(2)}%`, threshold: thresholds.credit.CC_DELINQ_90D_THRESHOLD, breached: delinqPct > thresholds.credit.CC_DELINQ_90D_THRESHOLD },
+    { name: 'HY_OAS_SPIKE_BPS', value: hySpikeBps, text: `${hySpikeBps.toFixed(2)} bps`, threshold: thresholds.credit.HY_OAS_SPIKE_BPS, breached: hySpikeBps > thresholds.credit.HY_OAS_SPIKE_BPS }
   ];
 
   for (const r of records) {
-    await sql`INSERT INTO signal_readings (signal_category, signal_name, reading_value, reading_date, threshold_breached, threshold_value, raw_payload)
-      VALUES ('credit', ${r.name}, ${r.value}, ${date}, ${r.breached}, ${r.threshold}, ${JSON.stringify({ hyNow, igNow, delinqNow })}::jsonb)
-      ON CONFLICT (signal_name, reading_date) DO UPDATE SET reading_value = EXCLUDED.reading_value, threshold_breached = EXCLUDED.threshold_breached, raw_payload = EXCLUDED.raw_payload`;
+    await upsertSignalReading({
+      category: 'credit',
+      name: r.name,
+      value: r.value,
+      text: r.text,
+      readingDate: date,
+      threshold: r.threshold,
+      breached: r.breached,
+      rawPayload: { hyNow, hyPrev, igNow, delinqNow, unit: r.name.includes('BPS') ? 'bps' : 'percent' }
+    });
   }
 
   return records;

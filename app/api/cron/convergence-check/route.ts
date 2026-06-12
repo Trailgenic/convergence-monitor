@@ -1,9 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { assertCronAuth, sql } from '@/lib/db';
 import { sendSms } from '@/lib/twilio';
+import { ensureSchema } from '@/lib/schema';
 
 export async function GET(req: NextRequest) {
   if (!assertCronAuth(req.headers.get('authorization'))) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+
+  await ensureSchema();
 
   const breaches = await sql`SELECT signal_category, signal_name, reading_value, reading_text, reading_date
     FROM signal_readings WHERE threshold_breached = TRUE AND reading_date >= NOW() - INTERVAL '14 days' ORDER BY reading_date DESC`;

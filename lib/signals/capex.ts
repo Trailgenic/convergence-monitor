@@ -1,7 +1,30 @@
-import { sql } from '@/lib/db';
+import { upsertSignalReading } from '@/lib/signals/readings';
+
 export async function pollCapexSignals() {
-  const date = new Date().toISOString().slice(0,10);
-  await sql`INSERT INTO signal_readings (signal_category, signal_name, reading_text, reading_date, threshold_breached, raw_payload)
-  VALUES ('capex','CAPEX_MANUAL_WEBHOOK_EVENT','Manual capex signal entry placeholder',${date},FALSE,'{}'::jsonb)
-  ON CONFLICT (signal_name, reading_date) DO NOTHING`;
+  const date = '2026-06-10';
+
+  await upsertSignalReading({
+    category: 'capex',
+    name: 'CAPEX_REVENUE_RATIO_EXPANSION',
+    text: 'ORCL ~83% FY26 rising; META 54%, MSFT 47%, GOOGL 46%',
+    readingDate: date,
+    breached: true,
+    rawPayload: {
+      cadence: 'manual-entry quarterly',
+      breachLogic: 'ratio rising QoQ at any tracked hyperscaler'
+    }
+  });
+
+  await upsertSignalReading({
+    category: 'demand_broadening',
+    name: 'DEMAND_BROADENING_MANUAL_ENTRY',
+    text: 'NVDA sovereign $30B+ FY26; AVGO 6 XPU customers, FY26 AI rev ~$56B (+180%)',
+    readingDate: date,
+    breached: false,
+    rawPayload: {
+      cadence: 'manual-entry quarterly',
+      antiConvergence: true,
+      aggregation: 'display only; never counts toward breach tally'
+    }
+  });
 }

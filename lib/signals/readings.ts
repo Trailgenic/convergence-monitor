@@ -11,7 +11,13 @@ type SignalReadingInput = {
   rawPayload?: Record<string, unknown>;
 };
 
-async function emitSignalLifecycleEvent(entry: SignalRegistryEntry, input: SignalReadingInput, normalizedValue: number | null, breached: boolean) {
+async function emitSignalLifecycleEvent(entry: SignalRegistryEntry, input: SignalReadingInput, normalizedValue: number | null, breached: boolean, state: 'clear' | 'flag' | 'breach') {
+  if (state === 'flag') {
+    await sql`INSERT INTO signal_lifecycle_events (event_date, signal_category, signal_name, event_type, reading_date, reading_value, reading_text, notes)
+      VALUES (${input.readingDate}, ${entry.category}, ${entry.name}, 'flag', ${input.readingDate}, ${normalizedValue}, ${input.text ?? null}, 'marginal flag')`;
+    return;
+  }
+
   if (breached) {
     const lastBreach = await sql`SELECT id FROM signal_lifecycle_events
       WHERE signal_name = ${entry.name} AND event_type = 'breach' AND created_at >= NOW() - INTERVAL '24 hours'
@@ -47,8 +53,8 @@ async function emitSignalLifecycleEvent(entry: SignalRegistryEntry, input: Signa
 
 export async function upsertSignalReading(input: SignalReadingInput) {
   const entry = getSignal(input.name);
-  const { breached, normalizedValue } = evaluateSignal(entry, input);
-  const rawPayload = JSON.stringify({ ...(input.rawPayload ?? {}), unit: entry.unit });
+  const { breached, normalizedValue, state, severe } = evaluateSignal(entry, input);
+  const rawPayload = JSON.stringify({ ...(input.rawPayload ?? {}), unit: entry.unit, state, severe });
 
   await sql`INSERT INTO signal_readings (signal_category, signal_name, reading_value, reading_text, reading_date, threshold_breached, threshold_value, raw_payload)
     VALUES (${entry.category}, ${entry.name}, ${normalizedValue}, ${input.text ?? null}, ${input.readingDate}, ${breached}, ${entry.threshold}, ${rawPayload}::jsonb)
@@ -60,7 +66,7 @@ export async function upsertSignalReading(input: SignalReadingInput) {
       threshold_value = EXCLUDED.threshold_value,
       raw_payload = EXCLUDED.raw_payload`;
 
-  await emitSignalLifecycleEvent(entry, input, normalizedValue, breached);
+  await emitSignalLifecycleEvent(entry, input, normalizedValue, breached, state);
 
-  return { entry, breached, normalizedValue };
+  return { entry, breached, normalizedValue, state, severe };
 }

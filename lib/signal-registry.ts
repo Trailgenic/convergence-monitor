@@ -1,6 +1,6 @@
-export type SignalCategory = 'credit' | 'capex' | 'cloud' | 'energy' | 'ipo' | 'demand_broadening';
+export type SignalCategory = 'credit' | 'capex' | 'cloud' | 'energy' | 'ipo' | 'rates' | 'demand_broadening';
 export type SignalSource = 'fred' | 'manual' | 'computed';
-export type SignalUnit = 'bps' | 'pct' | 'usd_mwh' | 'text';
+export type SignalUnit = 'bps' | 'pct' | 'usd_mwh' | 'level' | 'text';
 export type SignalDirection = 'above' | 'below';
 
 const num = (k: string, d: number) => Number(process.env[k] ?? d);
@@ -148,7 +148,7 @@ export const signalRegistry = [
     direction: 'below',
     tallyEligible: true,
     displayOnly: false,
-    notes: 'Manual day-one IPO pop; breach when pop is below threshold.'
+    notes: 'Manual day-one IPO pop; clear at >=20%, flag at [18,20), breach below 18%, severe breach for broken issue <=0%.'
   },
   {
     category: 'ipo',
@@ -160,6 +160,40 @@ export const signalRegistry = [
     tallyEligible: false,
     displayOnly: true,
     notes: 'Manual IPO calendar tracking display row.'
+  },
+
+  {
+    category: 'rates',
+    name: 'RATES_FOMC_HAWKISH_SHIFT',
+    source: 'manual',
+    unit: 'text',
+    threshold: null,
+    direction: null,
+    tallyEligible: true,
+    displayOnly: false,
+    notes: 'Manual breach when the median year-end dot rises vs prior SEP or >= half of FOMC participants project a hike in the current calendar year.'
+  },
+  {
+    category: 'rates',
+    name: 'RATES_GUIDANCE_REGIME',
+    source: 'manual',
+    unit: 'text',
+    threshold: null,
+    direction: null,
+    tallyEligible: false,
+    displayOnly: true,
+    notes: 'Display-only forward-guidance regime marker; never counts toward tally.'
+  },
+  {
+    category: 'rates',
+    name: 'RATES_MOVE_INDEX',
+    source: 'manual',
+    unit: 'level',
+    threshold: num('RATES_MOVE_INDEX_THRESHOLD', 120),
+    direction: 'above',
+    tallyEligible: false,
+    displayOnly: true,
+    notes: 'Optional MOVE Index placeholder; display-only until a data source is wired.'
   },
   {
     category: 'demand_broadening',

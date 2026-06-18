@@ -30,3 +30,9 @@ export function formatLastReading(reading: DashboardReading) {
 
   return reading.reading_text ?? 'N/A';
 }
+
+export function formatSignalState(reading: { threshold_breached: boolean; raw_payload?: unknown }) {
+  if (reading.threshold_breached) return 'Yes';
+  if (reading.raw_payload && typeof reading.raw_payload === 'object' && (reading.raw_payload as { state?: unknown }).state === 'flag') return 'Flag';
+  return 'No';
+}

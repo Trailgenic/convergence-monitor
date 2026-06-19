@@ -1,6 +1,8 @@
-import { sql } from '@vercel/postgres';
+import { sql as defaultSql } from '@vercel/postgres';
 
-export async function ensureSchema() {
+type SqlQuery = typeof defaultSql;
+
+export async function ensureSchema(sql: SqlQuery = defaultSql) {
   await sql`CREATE TABLE IF NOT EXISTS signal_readings (
     id SERIAL PRIMARY KEY,
     signal_category TEXT NOT NULL,
@@ -10,10 +12,21 @@ export async function ensureSchema() {
     reading_date DATE NOT NULL,
     threshold_breached BOOLEAN DEFAULT FALSE,
     threshold_value NUMERIC,
+    qualitative_severity TEXT DEFAULT 'weak' CHECK (qualitative_severity IN ('weak', 'moderate', 'severe')),
+    data_status TEXT DEFAULT 'ok' CHECK (data_status IN ('ok', 'placeholder', 'stale', 'error')),
     raw_payload JSONB,
     created_at TIMESTAMPTZ DEFAULT NOW(),
     UNIQUE(signal_name, reading_date)
   )`;
+  await sql`ALTER TABLE signal_readings ADD COLUMN IF NOT EXISTS qualitative_severity TEXT DEFAULT 'weak' CHECK (qualitative_severity IN ('weak', 'moderate', 'severe'))`;
+  await sql`ALTER TABLE signal_readings ADD COLUMN IF NOT EXISTS data_status TEXT DEFAULT 'ok' CHECK (data_status IN ('ok', 'placeholder', 'stale', 'error'))`;
+  await sql`UPDATE signal_readings
+    SET data_status = 'placeholder'
+    WHERE data_status = 'ok' AND (
+      reading_value IS NULL AND COALESCE(NULLIF(BTRIM(reading_text), ''), '') = ''
+      OR reading_text ~* '(placeholder|until|not configured|not yet wired|\mtbd\M|n/a-data)'
+      OR reading_value::text ~* '(placeholder|until|not configured|not yet wired|\mtbd\M|n/a-data)'
+    )`;
   await sql`CREATE TABLE IF NOT EXISTS convergence_events (
     id SERIAL PRIMARY KEY,
     event_date DATE NOT NULL,

@@ -1,6 +1,8 @@
-import { sql } from '@vercel/postgres';
+import { sql as defaultSql } from '@vercel/postgres';
 
-export async function ensureSchema() {
+type SqlQuery = typeof defaultSql;
+
+export async function ensureSchema(sql: SqlQuery = defaultSql) {
   await sql`CREATE TABLE IF NOT EXISTS signal_readings (
     id SERIAL PRIMARY KEY,
     signal_category TEXT NOT NULL,

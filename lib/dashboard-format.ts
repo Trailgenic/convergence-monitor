@@ -1,4 +1,4 @@
-import { isUnknownReading } from '@/lib/aggregation';
+import { isUnconfirmedReading, isUnknownReading } from '@/lib/aggregation';
 import { signalRegistry } from '@/lib/signal-registry';
 
 export type DashboardReading = {
@@ -34,6 +34,7 @@ export function formatLastReading(reading: DashboardReading) {
 
 export function formatSignalState(reading: { threshold_breached: boolean; data_status?: 'ok' | 'placeholder' | 'stale' | 'error' | null; reading_value?: string | number | null; reading_text?: string | null; raw_payload?: unknown }) {
   if (isUnknownReading(reading)) return 'unknown';
+  if (reading.data_status === 'stale' || isUnconfirmedReading(reading)) return 'stale';
   if (reading.threshold_breached) return 'Yes';
   if (reading.raw_payload && typeof reading.raw_payload === 'object' && (reading.raw_payload as { state?: unknown }).state === 'flag') return 'Flag';
   return 'No';

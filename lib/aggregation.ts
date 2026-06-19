@@ -47,9 +47,13 @@ export function normalizedDataStatus(row: { data_status?: DataStatus | null; rea
   return 'ok';
 }
 
+export function isUnconfirmedReading(row: { raw_payload?: unknown }): boolean {
+  return Boolean(row.raw_payload && typeof row.raw_payload === 'object' && (row.raw_payload as { unconfirmed?: unknown }).unconfirmed === true);
+}
+
 export function isUnknownReading(row: { data_status?: DataStatus | null; reading_value?: string | number | null; reading_text?: string | null; raw_payload?: unknown }): boolean {
   const status = normalizedDataStatus(row);
-  return status === 'placeholder' || status === 'error';
+  return status === 'placeholder' || status === 'error' || status === 'stale' && isUnconfirmedReading(row);
 }
 
 function isRecent(row: AggregationReading, now = new Date()): boolean {

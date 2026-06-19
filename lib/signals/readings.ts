@@ -1,5 +1,5 @@
 import { sql } from '@/lib/db';
-import { evaluateSignal } from '@/lib/evaluator';
+import { evaluateSignal, normalizeQualitativeSeverity, type BreachSeverity, type DataStatus } from '@/lib/evaluator';
 import { getSignal, type SignalRegistryEntry } from '@/lib/signal-registry';
 
 type SignalReadingInput = {
@@ -9,6 +9,8 @@ type SignalReadingInput = {
   text?: string | null;
   forcedBreached?: boolean;
   rawPayload?: Record<string, unknown>;
+  qualitativeSeverity?: BreachSeverity | null;
+  dataStatus?: DataStatus | null;
 };
 
 async function emitSignalLifecycleEvent(entry: SignalRegistryEntry, input: SignalReadingInput, normalizedValue: number | null, breached: boolean, state: 'clear' | 'flag' | 'breach') {
@@ -53,20 +55,24 @@ async function emitSignalLifecycleEvent(entry: SignalRegistryEntry, input: Signa
 
 export async function upsertSignalReading(input: SignalReadingInput) {
   const entry = getSignal(input.name);
-  const { breached, normalizedValue, state, severe } = evaluateSignal(entry, input);
-  const rawPayload = JSON.stringify({ ...(input.rawPayload ?? {}), unit: entry.unit, state, severe });
+  const qualitativeSeverity = normalizeQualitativeSeverity(input.qualitativeSeverity ?? input.rawPayload?.qualitative_severity ?? input.rawPayload?.qualitativeSeverity);
+  const dataStatus: DataStatus = input.dataStatus ?? (input.rawPayload?.placeholder === true ? 'placeholder' : 'ok');
+  const { breached, normalizedValue, state, severe, severity } = evaluateSignal(entry, { ...input, qualitativeSeverity });
+  const rawPayload = JSON.stringify({ ...(input.rawPayload ?? {}), unit: entry.unit, state, severe, severity });
 
-  await sql`INSERT INTO signal_readings (signal_category, signal_name, reading_value, reading_text, reading_date, threshold_breached, threshold_value, raw_payload)
-    VALUES (${entry.category}, ${entry.name}, ${normalizedValue}, ${input.text ?? null}, ${input.readingDate}, ${breached}, ${entry.threshold}, ${rawPayload}::jsonb)
+  await sql`INSERT INTO signal_readings (signal_category, signal_name, reading_value, reading_text, reading_date, threshold_breached, threshold_value, qualitative_severity, data_status, raw_payload)
+    VALUES (${entry.category}, ${entry.name}, ${normalizedValue}, ${input.text ?? null}, ${input.readingDate}, ${breached}, ${entry.threshold}, ${qualitativeSeverity}, ${dataStatus}, ${rawPayload}::jsonb)
     ON CONFLICT (signal_name, reading_date) DO UPDATE SET
       signal_category = EXCLUDED.signal_category,
       reading_value = EXCLUDED.reading_value,
       reading_text = EXCLUDED.reading_text,
       threshold_breached = EXCLUDED.threshold_breached,
       threshold_value = EXCLUDED.threshold_value,
+      qualitative_severity = EXCLUDED.qualitative_severity,
+      data_status = EXCLUDED.data_status,
       raw_payload = EXCLUDED.raw_payload`;
 
   await emitSignalLifecycleEvent(entry, input, normalizedValue, breached, state);
 
-  return { entry, breached, normalizedValue, state, severe };
+  return { entry, breached, normalizedValue, state, severe, severity, qualitativeSeverity, dataStatus };
 }

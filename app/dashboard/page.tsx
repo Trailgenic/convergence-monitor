@@ -13,6 +13,8 @@ type CategoryRow = {
   threshold_value: string | number | null;
   threshold_breached: boolean;
   reading_date: string;
+  qualitative_severity?: 'weak' | 'moderate' | 'severe' | null;
+  data_status?: 'ok' | 'placeholder' | 'stale' | 'error' | null;
   raw_payload?: unknown;
 };
 
@@ -54,13 +56,18 @@ export default async function DashboardPage() {
   let clearedCount: number | null = null;
   const dashboardErrors = new Set<DashboardError>();
   let aggregateStatus: AggregationStatus = 'Quiet';
+  let statusRationale = 'Quiet — no dashboard rows loaded.';
+  let coverageLine = 'Coverage unavailable until readings load.';
 
   try {
-    const latestByCategoryResult = await sql`SELECT DISTINCT ON (signal_name) signal_category, signal_name, reading_value, reading_text, threshold_value, threshold_breached, reading_date, raw_payload FROM signal_readings ORDER BY signal_name, reading_date DESC, created_at DESC`;
+    const latestByCategoryResult = await sql`SELECT DISTINCT ON (signal_name) signal_category, signal_name, reading_value, reading_text, threshold_value, threshold_breached, qualitative_severity, data_status, reading_date, raw_payload FROM signal_readings ORDER BY signal_name, reading_date DESC, created_at DESC`;
     latestByCategory = (latestByCategoryResult.rows as CategoryRow[])
       .filter((row) => isRegistrySignal(row.signal_name))
       .sort((a, b) => a.signal_category.localeCompare(b.signal_category) || a.signal_name.localeCompare(b.signal_name));
-    aggregateStatus = aggregateConvergence(latestByCategory).status;
+    const aggregate = aggregateConvergence(latestByCategory);
+    aggregateStatus = aggregate.status;
+    statusRationale = aggregate.statusRationale;
+    coverageLine = aggregate.coverageLine;
   } catch (error) {
     console.error('Dashboard category state query failed', error);
     dashboardErrors.add(classifyDashboardError(error));
@@ -95,6 +102,8 @@ export default async function DashboardPage() {
   return <main>
     <h1>Convergence Monitor Dashboard</h1>
     <p>Status: {aggregateStatus}</p>
+    <p><small>{statusRationale}</small></p>
+    <p><small>{coverageLine}</small></p>
     {errorMessages.map((message) => <p key={message}><small>{message}</small></p>)}
     <h2>Category state</h2>
     <table><thead><tr><th>Category</th><th>Signal</th><th>Last Reading</th><th>Threshold</th><th>Breach</th><th>Date</th></tr></thead><tbody>

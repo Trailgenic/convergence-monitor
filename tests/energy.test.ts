@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { evaluateEnergyHubReadings, resolveHubFromFacetOptions } from '../lib/signals/energy';
+import { evaluateEnergyHubReadings, redactEiaApiKey, resolveHubFromFacetOptions } from '../lib/signals/energy';
 
 const now = new Date('2026-06-19T12:00:00.000Z');
 const hub = { label: 'PJM West hub', threshold: 80 };
@@ -46,5 +46,9 @@ const resolvedCaiso = resolveHubFromFacetOptions({ signalName: 'CAISO_LMP_USD_MW
   { id: 'NP15_CODE', name: 'NP15 EZ Gen DA LMP Peak' }
 ]);
 assert.equal(resolvedCaiso?.code, 'NP15_CODE');
+
+const redacted = redactEiaApiKey('https://api.eia.gov/v2/electricity/wholesale-prices/data?api_key=secret-key&frequency=daily&data[0]=price');
+assert.equal(redacted.includes('secret-key'), false);
+assert.equal(redacted.includes('api_key=REDACTED'), true);
 
 console.log('energy EIA tests passed');

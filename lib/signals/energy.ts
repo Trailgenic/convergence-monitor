@@ -22,6 +22,14 @@ type EiaFacetOption = {
 
 type EiaDataRow = Record<string, unknown>;
 
+type EiaJson = { response?: { data?: unknown; facets?: unknown }; error?: unknown; message?: unknown; request?: unknown };
+
+class EiaRequestError extends Error {
+  constructor(readonly status: number, readonly redactedUrl: string, readonly body: unknown) {
+    super(`EIA request failed ${status}: ${formatEiaErrorBody(body)}`);
+  }
+}
+
 export type ResolvedEnergyHub = EnergyHubConfig & {
   facet: EiaFacetName;
   code: string;
@@ -72,10 +80,36 @@ function eiaUrl(path: string, apiKey: string, params: Record<string, string | nu
   return url;
 }
 
-async function fetchEiaJson(url: URL) {
+export function redactEiaApiKey(url: URL | string) {
+  const redacted = new URL(String(url));
+  if (redacted.searchParams.has('api_key')) redacted.searchParams.set('api_key', 'REDACTED');
+  return redacted.toString();
+}
+
+function safeJsonParse(text: string): unknown {
+  try {
+    return JSON.parse(text);
+  } catch {
+    return text;
+  }
+}
+
+function formatEiaErrorBody(body: unknown) {
+  return typeof body === 'string' ? body : JSON.stringify(body);
+}
+
+async function fetchEiaJson(url: URL): Promise<EiaJson> {
   const response = await fetch(url);
-  if (!response.ok) throw new Error(`EIA request failed ${response.status}: ${await response.text()}`);
-  return response.json() as Promise<{ response?: { data?: unknown; facets?: unknown } }>;
+  const text = await response.text();
+  const body = text ? safeJsonParse(text) : {};
+
+  if (!response.ok) {
+    const redactedUrl = redactEiaApiKey(url);
+    console.error('[energy:eia] non-2xx response', { status: response.status, url: redactedUrl, body });
+    throw new EiaRequestError(response.status, redactedUrl, body);
+  }
+
+  return body as EiaJson;
 }
 
 function responseArray(value: unknown): unknown[] {
@@ -108,10 +142,19 @@ export function resolveHubFromFacetOptions(hub: EnergyHubConfig, facet: EiaFacet
   return null;
 }
 
+function logFacetCandidates(facet: EiaFacetName, options: EiaFacetOption[]) {
+  const candidates = options
+    .filter((option) => ENERGY_HUBS.some((hub) => hub.aliases.some((alias) => facetText(option).includes(normalizeText(alias)))))
+    .map((option) => ({ code: optionCode(option), name: option.name ?? option.alias ?? option.description ?? option.id }));
+  console.log(`[energy:eia] ${facet} facet candidates`, { count: options.length, candidates });
+}
+
 export async function resolveEnergyHubs(apiKey: string): Promise<ResolvedEnergyHub[]> {
   const facetEntries = await Promise.all((['location', 'respondent'] as const).map(async (facet) => {
     const json = await fetchEiaJson(eiaUrl(`facet/${facet}`, apiKey));
-    return [facet, responseArray(json.response?.facets ?? json.response?.data) as EiaFacetOption[]] as const;
+    const options = responseArray(json.response?.facets ?? json.response?.data) as EiaFacetOption[];
+    logFacetCandidates(facet, options);
+    return [facet, options] as const;
   }));
   const facets = new Map<EiaFacetName, EiaFacetOption[]>(facetEntries);
 
@@ -222,6 +265,28 @@ async function fetchHubRows(apiKey: string, hub: ResolvedEnergyHub) {
   return responseArray(json.response?.data) as EiaDataRow[];
 }
 
+function eiaFailureReadingText(hub: EnergyHubConfig, error: unknown) {
+  if (error instanceof EiaRequestError) return `${hub.label}: EIA request failed ${error.status}; breach unconfirmed; ${formatEiaErrorBody(error.body)}`;
+  return `${hub.label}: EIA request failed; breach unconfirmed; ${error instanceof Error ? error.message : String(error)}`;
+}
+
+async function writeDegradedEnergyReading(hub: EnergyHubConfig, date: string, error: unknown) {
+  await upsertSignalReading({
+    name: hub.signalName,
+    text: eiaFailureReadingText(hub, error),
+    readingDate: date,
+    forcedBreached: false,
+    dataStatus: 'stale',
+    rawPayload: {
+      eiaError: error instanceof EiaRequestError ? error.body : error instanceof Error ? error.message : String(error),
+      eiaStatus: error instanceof EiaRequestError ? error.status : null,
+      eiaUrl: error instanceof EiaRequestError ? error.redactedUrl : null,
+      unconfirmed: true,
+      sustainedTradingDaysRequired: SUSTAINED_DAYS_REQUIRED
+    }
+  });
+}
+
 export async function pollEnergySignals() {
   await ensureSchema();
 
@@ -241,9 +306,25 @@ export async function pollEnergySignals() {
     return ENERGY_HUBS.length;
   }
 
-  const hubs = await resolveEnergyHubs(apiKey);
+  let hubs: ResolvedEnergyHub[];
+  try {
+    hubs = await resolveEnergyHubs(apiKey);
+  } catch (error) {
+    console.error('[energy:eia] failed to resolve energy hub facets; writing degraded energy readings', error);
+    for (const hub of ENERGY_HUBS) await writeDegradedEnergyReading(hub, date, error);
+    return ENERGY_HUBS.length;
+  }
+
   for (const hub of hubs) {
-    const rows = await fetchHubRows(apiKey, hub);
+    let rows: EiaDataRow[];
+    try {
+      rows = await fetchHubRows(apiKey, hub);
+    } catch (error) {
+      console.error(`[energy:eia] failed to fetch ${hub.signalName}; writing degraded energy reading`, error);
+      await writeDegradedEnergyReading(hub, date, error);
+      continue;
+    }
+
     const evaluation = evaluateEnergyHubReadings(hub, rows);
     await upsertSignalReading({
       name: hub.signalName,

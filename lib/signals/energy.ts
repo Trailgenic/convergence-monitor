@@ -1,23 +1,32 @@
 import { upsertSignalReading } from '@/lib/signals/readings';
+import type { BreachSeverity, DataStatus } from '@/lib/evaluator';
 
-const ENERGY_PLACEHOLDERS = ['PJM_LMP_USD_MWH', 'ERCOT_LMP_USD_MWH', 'CAISO_LMP_USD_MWH'] as const;
+export const ENERGY_STRESS_SIGNAL = 'ENERGY_STRESS_MANUAL_ENTRY' as const;
 
-export async function pollEnergySignals() {
-  const date = new Date().toISOString().slice(0, 10);
-  const eiaConfigured = Boolean(process.env.EIA_API_KEY);
+export type EnergyManualEntryInput = {
+  readingDate: string;
+  text?: string | null;
+  breached?: boolean;
+  qualitativeSeverity?: BreachSeverity | null;
+  dataStatus?: DataStatus | null;
+};
 
-  for (const name of ENERGY_PLACEHOLDERS) {
-    await upsertSignalReading({
-      name,
-      text: 'Placeholder until EIA LMP series mapping configured',
-      readingDate: date,
-      rawPayload: {
-        eiaApiKeyConfigured: eiaConfigured,
-        placeholder: true,
-        sustainedTradingDaysRequired: 5
-      }
-    });
-  }
+export async function upsertEnergyManualEntry(input: EnergyManualEntryInput) {
+  const hasManualText = Boolean(input.text?.trim());
+  const dataStatus = input.dataStatus ?? (hasManualText ? 'ok' : 'unknown');
 
-  return ENERGY_PLACEHOLDERS.length;
+  return upsertSignalReading({
+    name: ENERGY_STRESS_SIGNAL,
+    text: input.text ?? 'Manual energy stress entry pending',
+    readingDate: input.readingDate,
+    forcedBreached: input.breached ?? false,
+    qualitativeSeverity: input.qualitativeSeverity ?? 'weak',
+    dataStatus,
+    rawPayload: {
+      manual: true,
+      placeholder: dataStatus === 'unknown' || dataStatus === 'placeholder',
+      unconfirmed: dataStatus === 'unknown' || dataStatus === 'placeholder',
+      retiredHubRows: ['CAISO_LMP_USD_MWH', 'ERCOT_LMP_USD_MWH', 'PJM_LMP_USD_MWH']
+    }
+  });
 }

@@ -4,12 +4,14 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "build": "next build",
+    "build": "npm run db:ensure-if-configured && next build",
     "start": "next start",
     "lint": "next lint",
     "typecheck": "tsc --noEmit",
     "db:init": "tsx scripts/init-db.ts",
-    "test": "tsx tests/evaluator.test.ts"
+    "test": "tsx tests/evaluator.test.ts && tsx tests/dashboard-data.test.ts",
+    "next:build": "next build",
+    "db:ensure-if-configured": "tsx scripts/ensure-schema-if-configured.ts"
   },
   "dependencies": {
     "@vercel/postgres": "^0.10.0",

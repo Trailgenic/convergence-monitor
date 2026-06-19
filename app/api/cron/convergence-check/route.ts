@@ -9,13 +9,13 @@ export async function GET(req: NextRequest) {
 
   await ensureSchema();
 
-  const breaches = await sql`SELECT signal_category, signal_name, reading_value, reading_text, reading_date, raw_payload, threshold_breached
+  const breaches = await sql`SELECT signal_category, signal_name, reading_value, reading_text, reading_date, qualitative_severity, data_status, raw_payload, threshold_breached
     FROM signal_readings WHERE threshold_breached = TRUE AND reading_date >= NOW() - INTERVAL '14 days' ORDER BY reading_date DESC`;
   const aggregate = aggregateAlertDispatch(breaches.rows as AggregationReading[]);
   const rows = aggregate.tallyRows;
 
   if (aggregate.status === 'Quiet' || aggregate.status === 'Watch') {
-    return NextResponse.json({ ok: true, triggered: false, status: aggregate.status, reason: 'Need 2+ non-seeded tally-eligible categories breached in 14d window' });
+    return NextResponse.json({ ok: true, triggered: false, status: aggregate.status, reason: aggregate.statusRationale, coverage: aggregate.coverageLine });
   }
 
   const insert = await sql`INSERT INTO convergence_events (event_date, signals_fired, signal_count)
@@ -28,5 +28,5 @@ export async function GET(req: NextRequest) {
   await sendSms(msg);
   await sql`UPDATE convergence_events SET alert_sent = TRUE, alert_sent_at = NOW() WHERE id = ${insert.rows[0].id}`;
 
-  return NextResponse.json({ ok: true, triggered: true, status: aggregate.status, eventId: insert.rows[0].id });
+  return NextResponse.json({ ok: true, triggered: true, status: aggregate.status, statusRationale: aggregate.statusRationale, coverage: aggregate.coverageLine, eventId: insert.rows[0].id });
 }

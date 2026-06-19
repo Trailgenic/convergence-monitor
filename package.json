@@ -9,7 +9,7 @@
     "lint": "next lint",
     "typecheck": "tsc --noEmit",
     "db:init": "tsx scripts/init-db.ts",
-    "test": "tsx tests/evaluator.test.ts && tsx tests/dashboard-data.test.ts && tsx tests/energy.test.ts",
+    "test": "tsx tests/evaluator.test.ts && tsx tests/dashboard-data.test.ts",
     "next:build": "next build",
     "db:ensure-if-configured": "tsx scripts/ensure-schema-if-configured.ts"
   },

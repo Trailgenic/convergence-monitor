@@ -27,7 +27,7 @@ const seededState = [
   { signal_category: 'ipo', signal_name: 'IPO_DAY_ONE_POP_PCT', reading_value: 19.34, reading_text: 'SpaceX (SPCX) day-one pop +19.34%', reading_date: today, threshold_breached: false, data_status: 'ok' as const, raw_payload: { seeded: true, unit: 'pct', state: 'flag' } },
   { signal_category: 'cloud', signal_name: 'AWS_YOY_PCT', reading_value: 28, reading_text: 'AWS +28% Q1 2026 YoY growth', reading_date: today, threshold_breached: false, data_status: 'ok' as const, raw_payload: { seeded: true, unit: 'pct', state: 'clear' } },
   { signal_category: 'credit', signal_name: 'CC_DELINQ_90D_NYFED', reading_value: 13.12, reading_text: 'NY Fed account-based, Q1 2026', reading_date: today, threshold_breached: false, data_status: 'ok' as const, raw_payload: { seeded: true, unit: 'pct', state: 'clear' } },
-  { signal_category: 'energy', signal_name: 'PJM_LMP_USD_MWH', reading_value: null, reading_text: 'Placeholder until EIA LMP series mapping configured', reading_date: today, threshold_breached: false, data_status: 'placeholder' as const, raw_payload: { placeholder: true, unit: 'usd_mwh', state: 'clear' } },
+  { signal_category: 'energy', signal_name: 'ENERGY_STRESS_MANUAL_ENTRY', reading_value: null, reading_text: 'Manual energy stress entry pending', reading_date: today, threshold_breached: false, qualitative_severity: 'weak' as const, data_status: 'unknown' as const, raw_payload: { manual: true, placeholder: true, unconfirmed: true, unit: 'text', state: 'clear' } },
   { signal_category: 'demand_broadening', signal_name: 'DEMAND_BROADENING_MANUAL_ENTRY', reading_value: null, reading_text: 'NVDA sovereign $30B+ FY26; AVGO 6 XPU customers', reading_date: today, threshold_breached: false, data_status: 'ok' as const, raw_payload: { seeded: true, unit: 'text', state: 'clear' } },
   { signal_category: 'ipo', signal_name: 'IPO_CALENDAR_TRACKING', reading_value: null, reading_text: 'Anthropic confidential S-1 2026-06-01', reading_date: today, threshold_breached: false, data_status: 'ok' as const, raw_payload: { seeded: true, unit: 'text', state: 'clear' } },
   { signal_category: 'credit', signal_name: 'CC_DELINQ_90D_THRESHOLD', reading_value: 14.2, reading_text: 'retired row', reading_date: today, threshold_breached: true, data_status: 'ok' as const, raw_payload: { unit: 'pct' } }
@@ -40,11 +40,15 @@ assert.equal(dashboardRows.some((row) => row.signal_name === 'RATES_GUIDANCE_REG
 assert.equal(dashboardRows.some((row) => row.signal_name === 'RATES_MOVE_INDEX'), true);
 assert.equal(dashboardRows.some((row) => row.signal_name === 'DEMAND_BROADENING_MANUAL_ENTRY'), true);
 assert.equal(dashboardRows.some((row) => row.signal_name === 'CC_DELINQ_90D_THRESHOLD'), false);
+assert.equal(isRegistrySignal('CAISO_LMP_USD_MWH'), false);
+assert.equal(isRegistrySignal('ERCOT_LMP_USD_MWH'), false);
+assert.equal(isRegistrySignal('PJM_LMP_USD_MWH'), false);
+assert.equal(isRegistrySignal('ENERGY_STRESS_MANUAL_ENTRY'), true);
 assert.equal(formatLastReading(dashboardRows.find((row) => row.signal_name === 'CC_DELINQ_90D_NYFED')!), '13.12% — NY Fed account-based, Q1 2026');
 assert.equal(formatLastReading(dashboardRows.find((row) => row.signal_name === 'IPO_DAY_ONE_POP_PCT')!), '19.34% — SpaceX (SPCX) day-one pop +19.34%');
 assert.equal(formatSignalState(dashboardRows.find((row) => row.signal_name === 'IPO_DAY_ONE_POP_PCT')!), 'Flag');
-assert.equal(formatSignalState(dashboardRows.find((row) => row.signal_name === 'PJM_LMP_USD_MWH')!), 'unknown');
-assert.notEqual(formatSignalState(dashboardRows.find((row) => row.signal_name === 'PJM_LMP_USD_MWH')!), 'No');
+assert.equal(formatSignalState(dashboardRows.find((row) => row.signal_name === 'ENERGY_STRESS_MANUAL_ENTRY')!), 'unknown');
+assert.notEqual(formatSignalState(dashboardRows.find((row) => row.signal_name === 'ENERGY_STRESS_MANUAL_ENTRY')!), 'No');
 
 const aggregate = aggregateConvergence(dashboardRows);
 assert.equal(aggregate.status, 'Warning');
@@ -60,6 +64,12 @@ assert.equal(aggregateConvergence([{ signal_category: 'credit', signal_name: 'HY
 assert.equal(aggregateConvergence([{ signal_category: 'credit', signal_name: 'HY_OAS_SPIKE_BPS', reading_value: 105, reading_text: null, reading_date: today, threshold_breached: true, data_status: 'ok' }]).status, 'Watch');
 assert.equal(aggregateConvergence([{ signal_category: 'credit', signal_name: 'HY_OAS_SPIKE_BPS', reading_value: 50, reading_text: null, reading_date: today, threshold_breached: false, data_status: 'ok' }]).status, 'Quiet');
 assert.equal(aggregateConvergence([{ signal_category: 'demand_broadening', signal_name: 'DEMAND_BROADENING_MANUAL_ENTRY', reading_value: null, reading_text: 'manual collapse', reading_date: today, threshold_breached: false, data_status: 'ok', raw_payload: { collapse: true } }]).status, 'Convergence Firing');
+
+const manualEnergyBreachAggregate = aggregateConvergence([
+  { signal_category: 'energy', signal_name: 'ENERGY_STRESS_MANUAL_ENTRY', reading_value: null, reading_text: 'Manual energy stress breach', reading_date: today, threshold_breached: true, qualitative_severity: 'moderate' as const, data_status: 'ok' as const, raw_payload: { manual: true, unit: 'text', state: 'breach' } }
+]);
+assert.equal(manualEnergyBreachAggregate.status, 'Watch');
+assert.deepEqual(manualEnergyBreachAggregate.tallyCategories, ['energy']);
 
 const ratesWithPlaceholderMove = dashboardRows.filter((row) => row.signal_category === 'rates');
 const ratesAggregate = aggregateConvergence(ratesWithPlaceholderMove);

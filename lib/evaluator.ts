@@ -2,7 +2,7 @@ import type { SignalRegistryEntry } from '@/lib/signal-registry';
 import { SEVERE_BAND_PCT, WEAK_BAND_PCT } from '@/lib/status-config';
 
 export type BreachSeverity = 'weak' | 'moderate' | 'severe';
-export type DataStatus = 'ok' | 'placeholder' | 'stale' | 'error';
+export type DataStatus = 'ok' | 'unknown' | 'placeholder' | 'stale' | 'error';
 
 export type SignalReadingInput = {
   value?: number | null;

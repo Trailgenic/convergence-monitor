@@ -10,7 +10,7 @@ function queryText(strings: TemplateStringsArray) {
 const populatedRows = [
   { signal_category: 'capex', signal_name: 'CAPEX_REVENUE_RATIO_EXPANSION', reading_value: null, reading_text: 'capex breach', threshold_value: null, reading_date: today, threshold_breached: true, qualitative_severity: 'weak' as const, data_status: 'ok' as const, raw_payload: { unit: 'text', state: 'breach' } },
   { signal_category: 'rates', signal_name: 'RATES_FOMC_HAWKISH_SHIFT', reading_value: null, reading_text: 'rates breach', threshold_value: null, reading_date: today, threshold_breached: true, qualitative_severity: 'weak' as const, data_status: 'ok' as const, raw_payload: { unit: 'text', state: 'breach' } },
-  { signal_category: 'energy', signal_name: 'PJM_LMP_USD_MWH', reading_value: 50, reading_text: 'wired energy', threshold_value: 80, reading_date: today, threshold_breached: false, qualitative_severity: 'weak' as const, data_status: 'ok' as const, raw_payload: { unit: 'usd_mwh', state: 'clear' } }
+  { signal_category: 'energy', signal_name: 'ENERGY_STRESS_MANUAL_ENTRY', reading_value: null, reading_text: 'Manual energy stress entry pending', threshold_value: null, reading_date: today, threshold_breached: false, qualitative_severity: 'weak' as const, data_status: 'unknown' as const, raw_payload: { manual: true, placeholder: true, unconfirmed: true, unit: 'text', state: 'clear' } }
 ];
 
 async function main() {

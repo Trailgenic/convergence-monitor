@@ -108,36 +108,14 @@ export const signalRegistry = [
   },
   {
     category: 'energy',
-    name: 'PJM_LMP_USD_MWH',
+    name: 'ENERGY_STRESS_MANUAL_ENTRY',
     source: 'manual',
-    unit: 'usd_mwh',
-    threshold: num('PJM_LMP_THRESHOLD_USD_MWH', 80),
-    direction: 'above',
+    unit: 'text',
+    threshold: null,
+    direction: null,
     tallyEligible: true,
     displayOnly: false,
-    notes: 'Placeholder until EIA mapping is configured.'
-  },
-  {
-    category: 'energy',
-    name: 'ERCOT_LMP_USD_MWH',
-    source: 'manual',
-    unit: 'usd_mwh',
-    threshold: num('ERCOT_LMP_THRESHOLD_USD_MWH', 80),
-    direction: 'above',
-    tallyEligible: true,
-    displayOnly: false,
-    notes: 'Placeholder until EIA mapping is configured.'
-  },
-  {
-    category: 'energy',
-    name: 'CAISO_LMP_USD_MWH',
-    source: 'manual',
-    unit: 'usd_mwh',
-    threshold: num('CAISO_LMP_THRESHOLD_USD_MWH', 100),
-    direction: 'above',
-    tallyEligible: true,
-    displayOnly: false,
-    notes: 'Placeholder until EIA mapping is configured.'
+    notes: 'Manual qualitative energy stress entry; replaces retired CAISO/ERCOT/PJM hub rows.'
   },
   {
     category: 'ipo',

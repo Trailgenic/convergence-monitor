@@ -38,7 +38,7 @@ function isSeeded(rawPayload: unknown): boolean {
 }
 
 export function normalizedDataStatus(row: { data_status?: DataStatus | null; reading_value?: string | number | null; reading_text?: string | null; raw_payload?: unknown }): DataStatus {
-  if (row.data_status === 'placeholder' || row.data_status === 'stale' || row.data_status === 'error' || row.data_status === 'ok') return row.data_status;
+  if (row.data_status === 'unknown' || row.data_status === 'placeholder' || row.data_status === 'stale' || row.data_status === 'error' || row.data_status === 'ok') return row.data_status;
   if (row.raw_payload && typeof row.raw_payload === 'object' && (row.raw_payload as { placeholder?: unknown }).placeholder === true) return 'placeholder';
   const valueText = row.reading_value === null || row.reading_value === undefined ? '' : String(row.reading_value);
   const combined = `${valueText} ${row.reading_text ?? ''}`.trim().toLowerCase();
@@ -53,7 +53,7 @@ export function isUnconfirmedReading(row: { raw_payload?: unknown }): boolean {
 
 export function isUnknownReading(row: { data_status?: DataStatus | null; reading_value?: string | number | null; reading_text?: string | null; raw_payload?: unknown }): boolean {
   const status = normalizedDataStatus(row);
-  return status === 'placeholder' || status === 'error' || status === 'stale' && isUnconfirmedReading(row);
+  return status === 'unknown' || status === 'placeholder' || status === 'error' || status === 'stale' && isUnconfirmedReading(row);
 }
 
 function isRecent(row: AggregationReading, now = new Date()): boolean {

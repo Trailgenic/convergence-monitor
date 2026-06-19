@@ -13,13 +13,22 @@ export async function ensureSchema(sql: SqlQuery = defaultSql) {
     threshold_breached BOOLEAN DEFAULT FALSE,
     threshold_value NUMERIC,
     qualitative_severity TEXT DEFAULT 'weak' CHECK (qualitative_severity IN ('weak', 'moderate', 'severe')),
-    data_status TEXT DEFAULT 'ok' CHECK (data_status IN ('ok', 'placeholder', 'stale', 'error')),
+    data_status TEXT DEFAULT 'ok' CHECK (data_status IN ('ok', 'unknown', 'placeholder', 'stale', 'error')),
     raw_payload JSONB,
     created_at TIMESTAMPTZ DEFAULT NOW(),
     UNIQUE(signal_name, reading_date)
   )`;
   await sql`ALTER TABLE signal_readings ADD COLUMN IF NOT EXISTS qualitative_severity TEXT DEFAULT 'weak' CHECK (qualitative_severity IN ('weak', 'moderate', 'severe'))`;
-  await sql`ALTER TABLE signal_readings ADD COLUMN IF NOT EXISTS data_status TEXT DEFAULT 'ok' CHECK (data_status IN ('ok', 'placeholder', 'stale', 'error'))`;
+  await sql`ALTER TABLE signal_readings ADD COLUMN IF NOT EXISTS data_status TEXT DEFAULT 'ok' CHECK (data_status IN ('ok', 'unknown', 'placeholder', 'stale', 'error'))`;
+  await sql`DO $$
+  BEGIN
+    ALTER TABLE signal_readings DROP CONSTRAINT IF EXISTS signal_readings_data_status_check;
+    ALTER TABLE signal_readings ADD CONSTRAINT signal_readings_data_status_check CHECK (data_status IN ('ok', 'unknown', 'placeholder', 'stale', 'error'));
+  END $$`;
+  await sql`DELETE FROM signal_readings WHERE signal_name IN ('CAISO_LMP_USD_MWH', 'ERCOT_LMP_USD_MWH', 'PJM_LMP_USD_MWH')`;
+  await sql`INSERT INTO signal_readings (signal_category, signal_name, reading_value, reading_text, reading_date, threshold_breached, threshold_value, qualitative_severity, data_status, raw_payload)
+    SELECT 'energy', 'ENERGY_STRESS_MANUAL_ENTRY', NULL, 'Manual energy stress entry pending', CURRENT_DATE, FALSE, NULL, 'weak', 'unknown', '{"manual": true, "placeholder": true, "unconfirmed": true}'::jsonb
+    WHERE NOT EXISTS (SELECT 1 FROM signal_readings WHERE signal_name = 'ENERGY_STRESS_MANUAL_ENTRY')`;
   await sql`UPDATE signal_readings
     SET data_status = 'placeholder'
     WHERE data_status = 'ok' AND (

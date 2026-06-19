@@ -32,7 +32,7 @@ export function formatLastReading(reading: DashboardReading) {
   return reading.reading_text ?? 'N/A';
 }
 
-export function formatSignalState(reading: { threshold_breached: boolean; data_status?: 'ok' | 'placeholder' | 'stale' | 'error' | null; reading_value?: string | number | null; reading_text?: string | null; raw_payload?: unknown }) {
+export function formatSignalState(reading: { threshold_breached: boolean; data_status?: 'ok' | 'unknown' | 'placeholder' | 'stale' | 'error' | null; reading_value?: string | number | null; reading_text?: string | null; raw_payload?: unknown }) {
   if (isUnknownReading(reading)) return 'unknown';
   if (reading.data_status === 'stale' || isUnconfirmedReading(reading)) return 'stale';
   if (reading.threshold_breached) return 'Yes';

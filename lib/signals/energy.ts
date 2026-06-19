@@ -1,3 +1,4 @@
+import { ensureSchema } from '@/lib/schema';
 import { upsertSignalReading } from '@/lib/signals/readings';
 import type { BreachSeverity, DataStatus } from '@/lib/evaluator';
 
